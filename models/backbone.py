@@ -2,6 +2,8 @@
 Backbone modules.
 Modified from DETR (https://github.com/facebookresearch/detr)
 """
+import sys
+sys.path.append('/home/jiangxue/study/VisTR/')
 from collections import OrderedDict
 
 import torch
@@ -13,7 +15,10 @@ from typing import Dict, List
 
 from util.misc import NestedTensor, is_main_process
 
-from .position_encoding import build_position_encoding
+from models.position_encoding import build_position_encoding
+from models.transformer import build_transformer
+from models.vistr import VisTR
+from models.segmentation import VisTRsegm, PostProcessSegm
 
 
 class FrozenBatchNorm2d(torch.nn.Module):
@@ -117,3 +122,49 @@ def build_backbone(args):
     model = Joiner(backbone, position_embedding)
     model.num_channels = backbone.num_channels
     return model
+
+
+if __name__ == '__main__':
+    import os
+    os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+    device = torch.device('cuda')
+    from main import get_args_parser
+    parser = get_args_parser()
+    args = parser.parse_args()
+    
+    x = torch.Tensor(48, 3, 224, 288)
+    mask = torch.Tensor(48, 224, 288)
+    in_tensor = NestedTensor(x, mask)
+    in_tensor = in_tensor.to(device)
+    
+    args.dim_feedforward = 256
+    args.hidden_dim = 384 # 128//64, 128//3
+    args.num_heads = 1
+    args.enc_layers = 1
+    args.dec_layers = 1
+    args.num_frames = 48
+    args.num_queries = 96
+    
+    # test backbone
+    # features, pos = backbone(in_tensor)
+    # features: {'0': [108 * 2048 * 16 * 16, 108, 16, 16]}
+    # pos: [3 * 36 * 384 * 16 * 16]
+    
+    args.masks = True # 是否接入分割
+    backbone = build_backbone(args)
+    
+    transformer = build_transformer(args)
+    
+    vistr = VisTR(backbone, transformer, 1, args.num_frames, args.num_queries, aux_loss=args.aux_loss)
+    
+    vistr_seg = VisTRsegm(vistr)
+    vistr_seg.to(device)
+    
+    out = vistr_seg(in_tensor)
+    
+    post = PostProcessSegm()
+    result = []
+    
+    print('test')
+    
+    

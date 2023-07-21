@@ -45,17 +45,21 @@ class Transformer(nn.Module):
                 nn.init.xavier_uniform_(p)
 
     def forward(self, src, mask, query_embed, pos_embed):
+        # src: 3 * 384 * 36 * 256
+        # mask: 3 * 36 * 256
+        # query_embed: 360 * 384
+        # pos_embed: 3 * 384 * 36 * 256
         # flatten NxCxHxW to HWxNxC
         bs, c, h, w = src.shape
-        src = src.flatten(2).permute(2, 0, 1)
-        pos_embed = pos_embed.flatten(2).permute(2, 0, 1)
-        query_embed = query_embed.unsqueeze(1).repeat(1, bs, 1)
-        mask = mask.flatten(1)
+        src = src.flatten(2).permute(2, 0, 1) # 9216 * 3 * 384
+        pos_embed = pos_embed.flatten(2).permute(2, 0, 1) # 9216 * 3 * 384
+        query_embed = query_embed.unsqueeze(1).repeat(1, bs, 1) # 360 * 3 * 384
+        mask = mask.flatten(1) # 3 * 9216
 
         tgt = torch.zeros_like(query_embed)
-        memory = self.encoder(src, src_key_padding_mask=mask, pos=pos_embed)
+        memory = self.encoder(src, src_key_padding_mask=mask, pos=pos_embed) # 9216 * 3 * 384
         hs = self.decoder(tgt, memory, memory_key_padding_mask=mask,
-                          pos=pos_embed, query_pos=query_embed)
+                          pos=pos_embed, query_pos=query_embed) # 6 * 360 * 3 * 384
         return hs.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w)
 
 
@@ -80,7 +84,7 @@ class TransformerEncoder(nn.Module):
         if self.norm is not None:
             output = self.norm(output)
 
-        return output
+        return output # 9216 * 3 * 384
 
 
 class TransformerDecoder(nn.Module):
@@ -151,6 +155,7 @@ class TransformerEncoderLayer(nn.Module):
                      src_mask: Optional[Tensor] = None,
                      src_key_padding_mask: Optional[Tensor] = None,
                      pos: Optional[Tensor] = None):
+        # src pos: 9216 * 3 * 384
         q = k = self.with_pos_embed(src, pos)
         src2 = self.self_attn(q, k, value=src, attn_mask=src_mask,
                               key_padding_mask=src_key_padding_mask)[0]
@@ -158,8 +163,8 @@ class TransformerEncoderLayer(nn.Module):
         src = self.norm1(src)
         src2 = self.linear2(self.dropout(self.activation(self.linear1(src))))
         src = src + self.dropout2(src2)
-        src = self.norm2(src)
-        return src
+        src = self.norm2(src) # 9216 * 3 * 384
+        return src 
 
     def forward_pre(self, src,
                     src_mask: Optional[Tensor] = None,

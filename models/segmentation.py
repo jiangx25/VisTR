@@ -11,7 +11,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 from PIL import Image
-from .dcn.deform_conv import DeformConv
+# from .dcn.deform_conv import DeformConv
+from models.deform_conv_2d import DeformConv2d
 
 import util.box_ops as box_ops
 from util.misc import NestedTensor, interpolate, nested_tensor_from_tensor_list
@@ -151,8 +152,9 @@ class MaskHeadSmallConv(nn.Module):
         self.lay4 = torch.nn.Conv2d(inter_dims[2], inter_dims[3], 3, padding=1)
         self.gn4 = torch.nn.GroupNorm(8, inter_dims[3])
         self.gn5 = torch.nn.GroupNorm(8, inter_dims[4])
-        self.conv_offset = torch.nn.Conv2d(inter_dims[3], 18, 1)#, bias=False)
-        self.dcn = DeformConv(inter_dims[3],inter_dims[4], 3, padding=1)
+        # self.conv_offset = torch.nn.Conv2d(inter_dims[3], 18, 1)#, bias=False)
+        # self.dcn = DeformConv(inter_dims[3],inter_dims[4], 3, padding=1)
+        self.dcn = DeformConv2d(inter_dims[3], inter_dims[4], kernel_size=3, padding=1)
 
         self.dim = dim
 
@@ -164,6 +166,8 @@ class MaskHeadSmallConv(nn.Module):
             if name == "conv_offset":
                 nn.init.constant_(m.weight, 0)
                 nn.init.constant_(m.bias, 0)
+            elif 'dcn' in name:
+                pass
             else:
                 if isinstance(m, nn.Conv2d):
                     nn.init.kaiming_uniform_(m.weight, a=1)
@@ -200,8 +204,10 @@ class MaskHeadSmallConv(nn.Module):
             cur_fpn = _expand(cur_fpn, x.size(0) // cur_fpn.size(0))
         x = cur_fpn + F.interpolate(x, size=cur_fpn.shape[-2:], mode="nearest")
         # dcn for the last layer
-        offset = self.conv_offset(x)
-        x = self.dcn(x,offset)
+        # offset = self.conv_offset(x)
+        # x = self.dcn(x,offset)
+        x = self.dcn(x)
+        # #
         x = self.gn5(x)
         x = F.relu(x)
         return x

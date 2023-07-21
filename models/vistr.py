@@ -11,11 +11,11 @@ from util.misc import (NestedTensor, nested_tensor_from_tensor_list,
                        accuracy, get_world_size, interpolate,
                        is_dist_avail_and_initialized)
 
-from .backbone import build_backbone
-from .matcher import build_matcher
-from .segmentation import (VisTRsegm, PostProcessSegm,
+from models.backbone import build_backbone
+from models.matcher import build_matcher
+from models.segmentation import (VisTRsegm, PostProcessSegm,
                            dice_loss, sigmoid_focal_loss)
-from .transformer import build_transformer
+from models.transformer import build_transformer
 
 
 class VisTR(nn.Module):
@@ -63,15 +63,16 @@ class VisTR(nn.Module):
             samples = nested_tensor_from_tensor_list(samples)
         # moved the frame to batch dimension for computation efficiency
         features, pos = self.backbone(samples)
-        pos = pos[-1]
-        src, mask = features[-1].decompose()
-        src_proj = self.input_proj(src)
+        pos = pos[-1] # 3 * 36 * 384 * 16 * 16
+        src, mask = features[-1].decompose() # src: 108 * 2048 * 16 * 16, mask: 108 * 16 * 16
+        src_proj = self.input_proj(src) # 108 * 384 * 16 * 16
         n,c,h,w = src_proj.shape
         assert mask is not None
-        src_proj = src_proj.reshape(n//self.num_frames, self.num_frames, c, h, w).permute(0,2,1,3,4).flatten(-2)
-        mask = mask.reshape(n//self.num_frames, self.num_frames, h*w)
-        pos = pos.permute(0,2,1,3,4).flatten(-2)
-        hs = self.transformer(src_proj, mask, self.query_embed.weight, pos)[0]
+        src_proj = src_proj.reshape(n//self.num_frames, self.num_frames, c, h, w).permute(0,2,1,3,4).flatten(-2) # 3 * 384 * 36 * 256
+        mask = mask.reshape(n//self.num_frames, self.num_frames, h*w) # 3 * 36 * 356
+        pos = pos.permute(0,2,1,3,4).flatten(-2) # 3 * 384 * 36 * 256
+        # self.query_embed.weight: 360 * 384
+        hs = self.transformer(src_proj, mask, self.query_embed.weight, pos)[0] # 6 * 360 * 3 * 384
 
         outputs_class = self.class_embed(hs)
         outputs_coord = self.bbox_embed(hs).sigmoid()
@@ -186,8 +187,7 @@ class SetCriterion(nn.Module):
         src_masks = src_masks[src_idx]
         # upsample predictions to the target size
         try: 
-            src_masks = interpolate(src_masks[:, None], size=target_masks.shape[-2:],
-                                mode="bilinear", align_corners=False)
+            src_masks = interpolate(src_masks[:, None], size=target_masks.shape[-2:], mode="bilinear", align_corners=False)
             src_masks = src_masks[:, 0].flatten(1)
             target_masks = target_masks[tgt_idx].flatten(1)
         except:
@@ -310,18 +310,14 @@ class MLP(nn.Module):
 
 
 def build(args):
-    if args.dataset_file == "ytvos":
-        num_classes = 41
     device = torch.device(args.device)
-
     backbone = build_backbone(args)
-
     transformer = build_transformer(args)
 
     model = VisTR(
         backbone,
         transformer,
-        num_classes=num_classes,
+        num_classes=1,
         num_frames=args.num_frames,
         num_queries=args.num_queries,
         aux_loss=args.aux_loss,
@@ -344,10 +340,52 @@ def build(args):
     losses = ['labels', 'boxes', 'cardinality']
     if args.masks:
         losses += ["masks"]
-    criterion = SetCriterion(num_classes, matcher=matcher, weight_dict=weight_dict,
-                             eos_coef=args.eos_coef, losses=losses)
+    criterion = SetCriterion(1, matcher=matcher, weight_dict=weight_dict,eos_coef=args.eos_coef, losses=losses)
     criterion.to(device)
     postprocessors = {'bbox': PostProcess()}
     if args.masks:
         postprocessors['segm'] = PostProcessSegm()
     return model, criterion, postprocessors
+
+if __name__ == '__main__':
+    import os
+    os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+    device = torch.device('cuda')
+    from main import get_args_parser
+    parser = get_args_parser()
+    args = parser.parse_args()
+    
+    x = torch.Tensor(48, 3, 224, 288)
+    mask = torch.Tensor(48, 224, 288)
+    in_tensor = NestedTensor(x, mask)
+    in_tensor = in_tensor.to(device)
+    
+    args.dim_feedforward = 256
+    args.hidden_dim = 384 # 128//64, 128//3
+    args.num_heads = 1
+    args.enc_layers = 1
+    args.dec_layers = 1
+    args.num_frames = 48
+    args.num_queries = 96
+    args.device = device
+    
+    # test backbone
+    # features, pos = backbone(in_tensor)
+    # features: {'0': [108 * 2048 * 16 * 16, 108, 16, 16]}
+    # pos: [3 * 36 * 384 * 16 * 16]
+    
+    args.masks = True # 是否接入分割
+    backbone = build_backbone(args)
+    
+    transformer = build_transformer(args)
+    
+    vistr = VisTR(backbone, transformer, 1, args.num_frames, args.num_queries, aux_loss=args.aux_loss)
+    
+    vistr_seg = VisTRsegm(vistr)
+    vistr_seg.to(device)
+    
+    out = vistr_seg(in_tensor)
+    
+    post = PostProcessSegm()
+    result = []
+    
