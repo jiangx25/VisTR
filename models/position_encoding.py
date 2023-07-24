@@ -54,7 +54,9 @@ class PositionEmbeddingSine(nn.Module):
         pos = torch.cat((pos_z, pos_y, pos_x), dim=4).permute(0, 1, 4, 2, 3)
         return pos
 
-
+# for i in range(test.shape[0]):
+#     for j in range(test.shape[1]):
+#         cv2.imwrite('/data/result/jiangxue/test_png/' + str(i) + '_' + str(j) + '.png', test[i, j]*255)
 
 
 def build_position_encoding(args):

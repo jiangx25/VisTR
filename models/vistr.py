@@ -2,19 +2,19 @@
 VisTR model and criterion classes.
 Modified from DETR (https://github.com/facebookresearch/detr)
 """
+import sys
+sys.path.append('/home/jiangxue/study/VisTR/')
+sys.path.append('/home/jiangxue/study/VisTR/models/')
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 from util import box_ops
-from util.misc import (NestedTensor, nested_tensor_from_tensor_list,
-                       accuracy, get_world_size, interpolate,
-                       is_dist_avail_and_initialized)
+from util.misc import NestedTensor, nested_tensor_from_tensor_list, accuracy, get_world_size, interpolate, is_dist_avail_and_initialized
 
 from models.backbone import build_backbone
 from models.matcher import build_matcher
-from models.segmentation import (VisTRsegm, PostProcessSegm,
-                           dice_loss, sigmoid_focal_loss)
+from models.segmentation import VisTRsegm, PostProcessSegm, dice_loss, sigmoid_focal_loss
 from models.transformer import build_transformer
 
 
@@ -45,7 +45,7 @@ class VisTR(nn.Module):
         self.aux_loss = aux_loss
 
     def forward(self, samples: NestedTensor):
-        """ The forward expects a NestedTensor, which consists of:
+        """The forward expects a NestedTensor, which consists of:
                - samples.tensors: image sequences, of shape [num_frames x 3 x H x W]
                - samples.mask: a binary mask of shape [num_frames x H x W], containing 1 on padded pixels
 
@@ -357,8 +357,12 @@ if __name__ == '__main__':
     
     x = torch.Tensor(48, 3, 224, 288)
     mask = torch.Tensor(48, 224, 288)
+    
+    # mask = torch.ones(48, 224, 288)
+
     in_tensor = NestedTensor(x, mask)
     in_tensor = in_tensor.to(device)
+    
     
     args.dim_feedforward = 256
     args.hidden_dim = 384 # 128//64, 128//3

@@ -1,0 +1,99 @@
+# Build files
+build*
+debug/
+Debug/
+release/
+Release/
+test/
+*.exe
+*.[oa]
+
+# IDE files
+# # Eclipse
+.classpath
+.settings/
+# IntelliJ IDEA
+.idea
+*.iml
+*.iws
+# Visual Studio Code
+.vscode/
+*.vs
+*.project
+
+# Package files
+autoRTlib.egg-info/*
+dist/*
+
+# images
+*.bmp
+*.gif
+*.jpg
+*.jpeg
+*.jpe
+*.mha
+*.mhd
+*.png
+*.raw
+
+# documents
+*.csv
+*.doc
+*.docx
+*.json
+*.ppt
+*.pptx
+*.tif
+# *.txt
+*.xls
+*.xlsx
+
+
+# Model files
+# TensorFlow
+*.pb
+*.pbtxt
+*.ckpt
+*.ckpt.index
+# Keras
+*.h5
+# Pytorch
+*.pt
+# ONNX
+*.onnx
+*.onnxruntime
+# Caffe
+*.caffemodel
+*.prototxt
+# TensorRT engine
+*.plan
+
+# Compressed files
+*.bz2
+*.gz
+*.rar
+*.tar
+*.tbz
+*.tgz
+*.txz
+*.xz
+*.zip
+*.7z
+
+# System temp files
+temp/
+
+# Vim temp files
+*~
+*.swp
+*.swo
+
+# Logs and copies
+*.log
+*.bak
+*.backup
+
+# Python temp files
+__pycache__/
+*.pyc
+*.pyo
